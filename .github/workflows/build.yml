@@ -1,22 +1,72 @@
 name: Build APK
+
 on:
   push:
+    branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.7
+
       - name: Build release APK
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Show APK info
+        run: |
+          ls -la app/build/outputs/apk/release/
+          du -h app/build/outputs/apk/release/*.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: PocketOS-apk
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: PocketOS-apk
+          path: dist
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="v1.0.0"
+          NOTES="PocketOS 1.0.0 — lightweight Android launcher + mini apps.
+
+          Built automatically from \`${{ github.sha }}\` by GitHub Actions.
+
+          **Install:** download \`app-release.apk\` below, copy it to your phone and install (allow unknown sources).
+          The APK is signed with the Android debug key, so it is fine for personal sideloading but not for Play Store upload."
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/app-release.apk --clobber
+          else
+            gh release create "$TAG" dist/app-release.apk \
+              --title "PocketOS 1.0.0" \
+              --notes "$NOTES" \
+              --target "${{ github.sha }}"
+          fi
