@@ -1,0 +1,2 @@
+-keep class com.miuidialer.** { *; }
+-keep class android.telecom.** { *; }

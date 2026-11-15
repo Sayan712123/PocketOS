@@ -7,3 +7,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "PocketOS"
 include(":app")
+include(":miuidialer")

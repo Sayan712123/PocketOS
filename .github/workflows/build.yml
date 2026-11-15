@@ -23,18 +23,36 @@ jobs:
         with:
           gradle-version: 8.7
 
-      - name: Build release APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+      - name: Build PocketOS release APK
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Build MIUI Dialer release APK
+        run: gradle :miuidialer:assembleRelease --no-daemon --stacktrace
 
       - name: Show APK info
         run: |
           ls -la app/build/outputs/apk/release/
+          ls -la miuidialer/build/outputs/apk/release/
           du -h app/build/outputs/apk/release/*.apk
+          du -h miuidialer/build/outputs/apk/release/*.apk
+
+      - name: Collect APKs
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/*.apk dist/pocketos.apk
+          cp miuidialer/build/outputs/apk/release/*.apk dist/miui-dialer.apk
+          ls -la dist
 
       - uses: actions/upload-artifact@v4
         with:
           name: PocketOS-apk
-          path: app/build/outputs/apk/release/*.apk
+          path: dist/pocketos.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MIUIDialer-apk
+          path: dist/miui-dialer.apk
           if-no-files-found: error
 
   release:
@@ -49,24 +67,35 @@ jobs:
           name: PocketOS-apk
           path: dist
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: MIUIDialer-apk
+          path: dist
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          TAG="v1.0.0"
-          NOTES="PocketOS 1.0.0 — lightweight Android launcher + mini apps.
+          TAG="v1.1.0"
+          NOTES="PocketOS 1.1.0 — lightweight Android launcher + mini apps, plus a standalone MIUI-style dialer.
 
           Built automatically from \`${{ github.sha }}\` by GitHub Actions.
 
-          **Install:** download \`app-release.apk\` below, copy it to your phone and install (allow unknown sources).
-          The APK is signed with the Android debug key, so it is fine for personal sideloading but not for Play Store upload."
+          **Assets**
+          - \`pocketos.apk\` — PocketOS hub / launcher / mini apps
+          - \`miui-dialer.apk\` — standalone MIUI-style Phone app (dialpad, recents, contacts, full-screen call UI)
+
+          **Install:** download the APK, copy it to your phone and install (allow unknown sources).
+          Both APKs are signed with the Android debug key, so they are fine for personal sideloading but not for Play Store upload.
+
+          **MIUI Dialer setup:** open the app → tap \`Set default\` → allow Phone role + contacts/call-log permissions. The MIUI call screen only appears for real calls once the app holds the default-dialer role."
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/app-release.apk --clobber
+            gh release upload "$TAG" dist/pocketos.apk dist/miui-dialer.apk --clobber
           else
-            gh release create "$TAG" dist/app-release.apk \
-              --title "PocketOS 1.0.0" \
+            gh release create "$TAG" dist/pocketos.apk dist/miui-dialer.apk \
+              --title "PocketOS 1.1.0 + MIUI Dialer" \
               --notes "$NOTES" \
               --target "${{ github.sha }}"
           fi
